@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Matrix</string>
+    <string name="country">中国</string>
+
+    <string name="register">注册</string>
+    <string name="login">登录</string>
+</resources>
