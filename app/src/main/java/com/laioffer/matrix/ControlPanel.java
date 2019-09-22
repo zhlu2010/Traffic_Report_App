@@ -99,6 +99,12 @@ public class ControlPanel extends AppCompatActivity {
     }
 
     @Override
+    public void onBackPressed(){
+        logout();
+        super.onBackPressed();
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
