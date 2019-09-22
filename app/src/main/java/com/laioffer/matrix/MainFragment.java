@@ -5,18 +5,23 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -28,24 +33,29 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.Continuation;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
+import com.squareup.picasso.Picasso;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
-public class MainFragment extends Fragment implements OnMapReadyCallback, ReportDialog.DialogCallBack{
+public class MainFragment extends Fragment implements OnMapReadyCallback, ReportDialog.DialogCallBack, GoogleMap.OnMarkerClickListener{
 
     private static final int REQUEST_CAPTURE_IMAGE = 100;
     private MapView mapView;
@@ -64,6 +74,17 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
+    //event information part
+    private BottomSheetBehavior bottomSheetBehavior;
+    private ImageView mEventImageLike;
+    private ImageView mEventImageComment;
+    private ImageView mEventImageType;
+    private TextView mEventTextLike;
+    private TextView mEventTextType;
+    private TextView mEventTextLocation;
+    private TextView mEventTextTime;
+    private TrafficEvent mEvent;
+
 
 
     public MainFragment() {
@@ -88,6 +109,7 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
         storage = FirebaseStorage.getInstance();
         storageRef = storage.getReference();
         verifyStoragePermissions(getActivity());
+        setupBottomBehavior();
         return view;
     }
 
@@ -154,32 +176,36 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
     @Override
     public void onMapReady(GoogleMap googleMap) {
         MapsInitializer.initialize(getContext());
+        googleMap.setOnMarkerClickListener(this);
         this.googleMap = googleMap;
         this.googleMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(getContext(), R.raw.style_json));
-
-        locationTracker = new LocationTracker(getActivity());
-        locationTracker.getLocation();
-
+        addMySef();
         LatLng latLng = new LatLng(locationTracker.getLatitude(), locationTracker.getLongitude());
-
         CameraPosition cameraPosition = new CameraPosition.Builder()
                 .target(latLng)      // Sets the center of the map to Mountain View
                 .zoom(16)// Sets the zoom
                 .bearing(90)           // Sets the orientation of the camera to east
                 .tilt(30)                   // Sets the tilt of the camera to 30 degrees
                 .build();                   // Creates a CameraPosition from the builder
-
         googleMap.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
 
+        loadEventInVisibleMap();
+    }
+
+    private void addMySef() {
+        if(locationTracker == null) {
+            locationTracker = new LocationTracker(getActivity());
+        }
+        locationTracker.getLocation();
+
+        LatLng latLng = new LatLng(locationTracker.getLatitude(), locationTracker.getLongitude());
         MarkerOptions marker = new MarkerOptions().position(latLng).
                 title("You");
 
         // Changing marker icon
         marker.icon(BitmapDescriptorFactory.fromResource(R.drawable.boy));
-
         // adding marker
         googleMap.addMarker(marker);
-
     }
 
     private String updateEvent(String userId, String editString, String event_type) {
@@ -213,6 +239,51 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
         });
 
         return key;
+    }
+
+    private void loadEventInVisibleMap() {
+        database.child("events").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                googleMap.clear();
+                addMySef();
+                for(DataSnapshot snapShot: dataSnapshot.getChildren()) {
+                    TrafficEvent event = snapShot.getValue(TrafficEvent.class);
+                    double eventLatitude = event.getEvent_latitude();
+                    double eventLongitude = event.getEvent_longitude();
+
+                    locationTracker.getLocation();
+                    double centerLatitude = locationTracker.getLatitude();
+                    double centerLongitude = locationTracker.getLongitude();
+
+                    int distance = Utils.distanceBetweenTwoLocations(centerLatitude, centerLongitude,
+                            eventLatitude, eventLongitude);
+
+                    if (distance < 20) {
+                        LatLng latLng = new LatLng(eventLatitude, eventLongitude);
+                        MarkerOptions marker = new MarkerOptions().position(latLng);
+
+                        // Changing marker icon
+                        String type = event.getEvent_type();
+                        Bitmap icon = BitmapFactory.decodeResource(getContext().getResources(),
+                                Config.trafficMap.get(type));
+
+                        Bitmap resizeBitmap = Utils.getResizedBitmap(icon, 130, 130);
+
+                        marker.icon(BitmapDescriptorFactory.fromBitmap(resizeBitmap));
+
+                        // adding marker
+                        Marker mker = googleMap.addMarker(marker);
+                        mker.setTag(event);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                //TODO: do something
+            }
+        });
     }
 
     @Override
@@ -273,6 +344,7 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
         File file = new File(path);
         if (!file.exists()) {
             dialog.dismiss();
+            loadEventInVisibleMap();
             return;
         }
 
@@ -297,6 +369,7 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
                 File file = new File(path);
                 file.delete();
                 dialog.dismiss();
+                loadEventInVisibleMap();
             }
         });
     }
@@ -315,5 +388,110 @@ public class MainFragment extends Fragment implements OnMapReadyCallback, Report
         }
     }
 
+    @Override
+    public boolean onMarkerClick(Marker marker) {
+        mEvent = (TrafficEvent) marker.getTag();
+        if (mEvent == null) {
+            return true;
+        }
+        String user = mEvent.getEvent_reporter_id();
+        String type = mEvent.getEvent_type();
+        long time = mEvent.getEvent_timestamp();
+        double latitude = mEvent.getEvent_latitude();
+        double longitutde = mEvent.getEvent_longitude();
+        int likeNumber = mEvent.getEvent_like_number();
+
+        String description = mEvent.getEvent_description();
+        marker.setTitle(description);
+        mEventTextLike.setText(String.valueOf(likeNumber));
+        mEventTextType.setText(type);
+
+        final  String url = mEvent.getImgUri();
+        if(url != null) {
+            //            new Thread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    Log.d("Here", Thread.currentThread().getName());
+//                    final Bitmap bitmap = Utils.getBitmapFromURL(url);
+//                    getActivity().runOnUiThread(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            mEventImageType.setImageBitmap(bitmap);
+//                        }
+//                    });
+//                }
+//            }).start();
+
+//            new AsyncTask<Void, Void, Bitmap>() {
+//
+//                @Override
+//                protected Bitmap doInBackground(Void... voids) {
+//                    final Bitmap bitmap = Utils.getBitmapFromURL(url);
+//                    return bitmap;
+//                }
+//
+//                @Override
+//                protected void onPostExecute(Bitmap bitmap) {
+//                    super.onPostExecute(bitmap);
+//                    mEventImageType.setImageBitmap(bitmap);
+//                }
+//            }.execute();
+            Picasso.get().load(url).into(mEventImageType);
+        } else {
+            mEventImageType.setImageDrawable(ContextCompat.getDrawable(getContext(), Config.trafficMap.get(type)));
+        }
+
+        if (user == null) {
+            user = "";
+        }
+        String info = "Reported by " + user + " " + Utils.timeTransformer(time);
+        mEventTextTime.setText(info);
+
+
+        int distance = 0;
+        locationTracker = new LocationTracker(getActivity());
+        locationTracker.getLocation();
+        if (locationTracker != null) {
+            distance = Utils.distanceBetweenTwoLocations(latitude, longitutde, locationTracker.getLatitude(), locationTracker.getLongitude());
+        }
+        mEventTextLocation.setText(distance + " miles away");
+
+        if (bottomSheetBehavior.getState() == BottomSheetBehavior.STATE_HIDDEN) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+        } else {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        }
+        return false;
+    }
+
+    private void setupBottomBehavior() {
+        //set up bottom up slide
+        final View nestedScrollView = view.findViewById(R.id.nestedScrollView);
+        bottomSheetBehavior = BottomSheetBehavior.from(nestedScrollView);
+
+        //set hidden initially
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+        //set expansion speed
+        bottomSheetBehavior.setPeekHeight(1000);
+
+        mEventImageLike = (ImageView) view.findViewById(R.id.event_info_like_img);
+        mEventImageComment = (ImageView) view.findViewById(R.id.event_info_comment_img);
+        mEventImageType = (ImageView) view.findViewById(R.id.event_info_type_img);
+        mEventTextLike = (TextView) view.findViewById(R.id.event_info_like_text);
+        mEventTextType = (TextView) view.findViewById(R.id.event_info_type_text);
+        mEventTextLocation = (TextView) view.findViewById(R.id.event_info_location_text);
+        mEventTextTime = (TextView) view.findViewById(R.id.event_info_time_text);
+
+        mEventImageLike.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                int number = Integer.parseInt(mEventTextLike.getText().toString());
+                database.child("events").child(mEvent.getId()).child("event_like_number").setValue(number + 1);
+                mEventTextLike.setText(String.valueOf(number + 1));
+                loadEventInVisibleMap();
+            }
+        });
+    }
 
 }
