@@ -1,4 +1,4 @@
-package com.laioffer.matrix;
+package Example;
 
 import java.util.List;
 import android.content.Context;
@@ -9,7 +9,7 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import Example.Example_DataService;
+import com.laioffer.matrix.R;
 
 public class EventAdapter extends BaseAdapter {
     Context context;

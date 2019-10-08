@@ -1,4 +1,4 @@
-package com.laioffer.matrix;
+package Example;
 
 public class Event {
 

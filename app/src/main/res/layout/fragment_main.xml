@@ -23,6 +23,18 @@ tools:context="com.laioffer.matrix.MainFragment">
                     android:layout_height="match_parent" />
 
                 <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/voice"
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:layout_above="@id/fab"
+                    android:layout_alignParentEnd="true"
+                    android:layout_marginBottom="6dp"
+                    android:layout_marginRight="24dp"
+                    android:src="@drawable/plus"
+                    />
+
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
                     android:id="@+id/fab"
                     android:layout_width="80dp"
                     android:layout_height="80dp"

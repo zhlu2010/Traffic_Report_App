@@ -1,7 +1,5 @@
 package Example;
 
-import com.laioffer.matrix.Event;
-
 import java.util.ArrayList;
 import java.util.List;
 

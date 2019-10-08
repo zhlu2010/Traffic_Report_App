@@ -1,4 +1,4 @@
-package com.laioffer.matrix;
+package Example;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -7,6 +7,9 @@ import android.util.Log;
 
 
 import android.os.Bundle;
+
+import com.laioffer.matrix.EventFragment;
+import com.laioffer.matrix.R;
 
 import Example.Example_CommentFragment;
 
